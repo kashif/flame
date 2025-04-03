@@ -25,14 +25,14 @@ from flame.models.pipeline_fla import pipeline_fla
 from flame.tools.utils import get_num_flop_per_token
 from torchtitan.components.checkpoint import CheckpointManager
 from torchtitan.components.ft import FTParallelDims, init_ft_manager
-from torchtitan.components.loss import cross_entropy_loss
+from torchtitan.components.loss import build_cross_entropy_loss
+from torchtitan.components.lr_scheduler import build_lr_schedulers
 from torchtitan.components.metrics import (
     build_device_memory_monitor,
     build_metrics_processor,
     ensure_pp_loss_visible,
 )
 from torchtitan.components.optimizer import build_optimizers
-from torchtitan.components.lr_scheduler import build_lr_schedulers
 from torchtitan.distributed import ParallelDims
 from torchtitan.distributed import utils as dist_utils
 from torchtitan.protocols.model_converter import build_model_converters
@@ -64,7 +64,7 @@ register_train_spec(
         build_lr_schedulers_fn=build_lr_schedulers,
         build_dataloader_fn=build_dataloader,
         build_tokenizer_fn=build_tokenizer,
-        loss_fn=cross_entropy_loss,
+        build_loss_fn=build_cross_entropy_loss,
     )
 )
 
