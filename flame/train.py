@@ -22,7 +22,7 @@ from flame.config_manager import JobConfig
 from flame.data import build_dataloader, shuffle
 from flame.models.parallelize_fla import parallelize_fla
 from flame.models.pipeline_fla import pipeline_fla
-from flame.tools.utils import get_num_flop_per_token
+from flame.tools.utils import get_nparams_and_flops
 from torchtitan.components.checkpoint import CheckpointManager
 from torchtitan.components.ft import FTParallelDims, init_ft_manager
 from torchtitan.components.loss import build_cross_entropy_loss
@@ -407,12 +407,9 @@ def main(job_config: JobConfig):
     model_converters = build_model_converters(job_config, parallel_dims)
     model_converters.convert(model)
 
-    # log model size
-    model_param_count = utils.get_num_params(model)
-    num_flop_per_token = get_num_flop_per_token(
-        utils.get_num_params(model, exclude_embedding=True),
-        model_config,
-        job_config.training.context_len,
+    # calculate model size and flops per token
+    model_param_count, num_flops_per_token = get_nparams_and_flops(
+        model, model_config, job_config.training.context_len
     )
 
     # move sharded model to CPU/GPU and initialize weights via DTensor
@@ -510,7 +507,7 @@ def main(job_config: JobConfig):
     checkpoint.load(step=job_config.checkpoint.load_step)
     metric_logger = build_metrics_processor(job_config, parallel_dims)
     # Set dependent attributes for metric_logger
-    metric_logger.num_flop_per_token = num_flop_per_token
+    metric_logger.num_flops_per_token = num_flops_per_token
     metric_logger.optimizers = optimizers  # Pass optimizers if needed by logger logic
     metric_logger.lr_schedulers = (
         lr_schedulers  # Pass schedulers if needed by logger logic
@@ -519,13 +516,13 @@ def main(job_config: JobConfig):
     # plot losses loaded from checkpoint (if any) to TensorBoard
     # NOTE: Loss info after the last log step before checkpoint saving will not be ploted.
     #       This can be avoided by setting checkpoint.interval to be a multiple of metrics.log_freq
-    if train_state.step > 0:
+    if train_state.step > 0 and len(metric_logger.data_loading_times) > 0:
         for idx, step in enumerate(train_state.log_steps):
-            metrics = {
-                "optim/global_avg_loss": train_state.global_avg_losses[idx],
-                "optim/global_max_loss": train_state.global_max_losses[idx],
-            }
-            metric_logger.log(metrics, step=step)
+            metric_logger.log(
+                step,
+                global_avg_loss=train_state.global_avg_losses[idx],
+                global_max_loss=train_state.global_max_losses[idx],
+            )
 
     data_iterator = iter(dataloader)
 
