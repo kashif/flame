@@ -27,26 +27,15 @@ from torchtitan.components.checkpoint import CheckpointManager
 from torchtitan.components.ft import FTParallelDims, init_ft_manager
 from torchtitan.components.loss import build_cross_entropy_loss
 from torchtitan.components.lr_scheduler import build_lr_schedulers
-from torchtitan.components.metrics import (
-    build_device_memory_monitor,
-    build_metrics_processor,
-    ensure_pp_loss_visible,
-)
+from torchtitan.components.metrics import build_device_memory_monitor, build_metrics_processor, ensure_pp_loss_visible
 from torchtitan.components.optimizer import build_optimizers
 from torchtitan.distributed import ParallelDims
 from torchtitan.distributed import utils as dist_utils
 from torchtitan.protocols.model_converter import build_model_converters
-from torchtitan.protocols.train_spec import (
-    TrainSpec,
-    get_train_spec,
-    register_train_spec,
-)
+from torchtitan.protocols.train_spec import TrainSpec, get_train_spec, register_train_spec
 from torchtitan.tools import utils
 from torchtitan.tools.logging import init_logger, logger
-from torchtitan.tools.profiling import (
-    maybe_enable_memory_snapshot,
-    maybe_enable_profiling,
-)
+from torchtitan.tools.profiling import maybe_enable_memory_snapshot, maybe_enable_profiling
 
 
 def build_tokenizer(job_config: JobConfig) -> AutoTokenizer:
