@@ -405,22 +405,46 @@ class DataCollatorForLanguageModeling:
                 batch['cu_seqlens'] = torch.cat([example['cu_seqlens'] for example in examples], dim=0).unsqueeze(0)
             else:
                 # determine boundaries by bos/eos positions
-                if self.tokenizer.add_bos_token:
+                # Check for bos_token_id first
+                if self.tokenizer.bos_token_id is not None:
                     cu_seqlens = []
+                    # Handle case where the sequence doesn't start with BOS
                     if batch['input_ids'][0, 0] != self.tokenizer.bos_token_id:
                         cu_seqlens.append(torch.tensor([0]))
+                    # Find all BOS token positions
                     cu_seqlens.append(torch.where(batch['input_ids'].eq(self.tokenizer.bos_token_id))[1])
-                    cu_seqlens.append(torch.tensor([len(batch['input_ids'][0])]))
+                    # Add the end of the entire batch
+                    cu_seqlens.append(torch.tensor([batch['input_ids'].size(1)])) # Use size(1) for sequence length dim
                     batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
-                elif self.tokenizer.add_eos_token:
+                # Else, check for eos_token_id
+                elif self.tokenizer.eos_token_id is not None:
                     cu_seqlens = [torch.tensor([0])]
-                    cu_seqlens.append(torch.where(batch['input_ids'].eq(self.tokenizer.eos_token_id))[1] + 1)
+                    # Find positions *after* EOS tokens
+                    eos_positions = torch.where(batch['input_ids'].eq(self.tokenizer.eos_token_id))[1] + 1
+                    cu_seqlens.append(eos_positions)
+                    # Handle case where the sequence doesn't end with EOS
                     if batch['input_ids'][0, -1] != self.tokenizer.eos_token_id:
-                        cu_seqlens.append(torch.tensor([len(batch['input_ids'][0])]))
+                         # Only add the final length if the last found EOS wasn't already the end
+                        if eos_positions.numel() == 0 or eos_positions[-1] != batch['input_ids'].size(1):
+                             cu_seqlens.append(torch.tensor([batch['input_ids'].size(1)])) # Use size(1) for sequence length dim
                     batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
+                # Else, neither BOS nor EOS is usable
                 else:
-                    raise ValueError("You must allow the tokenizer to add either a bos or eos token as separators.")
+                    raise ValueError(
+                        "For varlen=True, the tokenizer must have either a bos_token_id or an eos_token_id defined "
+                        "to act as sequence separators, or cu_seqlens must be provided in the dataset."
+                    )
+
+            # Ensure cu_seqlens are correctly calculated (monotonically increasing, start at 0, end at total length)
+            if not torch.all(batch['cu_seqlens'][1:] >= batch['cu_seqlens'][:-1]):
+                 raise ValueError(f"Calculated cu_seqlens are not monotonically increasing: {batch['cu_seqlens']}")
+            if batch['cu_seqlens'][0] != 0:
+                raise ValueError(f"Calculated cu_seqlens do not start at 0: {batch['cu_seqlens']}")
+            if batch['cu_seqlens'][-1] != batch['input_ids'].size(1):
+                raise ValueError(f"Calculated cu_seqlens do not end at total length {batch['input_ids'].size(1)}: {batch['cu_seqlens']}")
+
             if self.context_len is not None:
+                # This logic splits sequences based on context_len *after* initial boundaries are found
                 bos = batch['cu_seqlens'][:-1].tolist()
                 eos = batch['cu_seqlens'][1:].tolist()
                 batch['cu_seqlens'] = torch.cat(
