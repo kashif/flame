@@ -441,9 +441,9 @@ class DataCollatorForLanguageModeling:
                     # Filter out empty tensors before cat
                     cu_seqlens = [t for t in cu_seqlens if t.numel() > 0]
                     if not cu_seqlens: # Handle case where input is empty or has no BOS
-                         batch['cu_seqlens'] = torch.tensor([0, batch['input_ids'].size(1)], dtype=torch.int32, device=batch['input_ids'].device)
+                        batch['cu_seqlens'] = torch.tensor([0, batch['input_ids'].size(1)], dtype=torch.int32, device=batch['input_ids'].device)
                     else:
-                         batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
+                        batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
 
                 # Else, check for eos_token_id
                 elif self.tokenizer.eos_token_id is not None:
@@ -461,9 +461,9 @@ class DataCollatorForLanguageModeling:
                     # Filter out empty tensors before cat
                     cu_seqlens = [t for t in cu_seqlens if t.numel() > 0]
                     if not cu_seqlens: # Handle case where input is empty or has no EOS
-                         batch['cu_seqlens'] = torch.tensor([0, batch['input_ids'].size(1)], dtype=torch.int32, device=batch['input_ids'].device)
+                        batch['cu_seqlens'] = torch.tensor([0, batch['input_ids'].size(1)], dtype=torch.int32, device=batch['input_ids'].device)
                     else:
-                         batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
+                        batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
                 # Else, neither BOS nor EOS is usable
                 else:
                     raise ValueError(
@@ -473,9 +473,9 @@ class DataCollatorForLanguageModeling:
 
                 # --- cu_seqlens validation checks remain the same ---
                 if batch['cu_seqlens'].numel() < 2:
-                     raise ValueError(f"Calculated cu_seqlens must have at least start and end: {batch['cu_seqlens']}")
+                    raise ValueError(f"Calculated cu_seqlens must have at least start and end: {batch['cu_seqlens']}")
                 if not torch.all(batch['cu_seqlens'][1:] >= batch['cu_seqlens'][:-1]):
-                     raise ValueError(f"Calculated cu_seqlens are not monotonically increasing: {batch['cu_seqlens']}")
+                    raise ValueError(f"Calculated cu_seqlens are not monotonically increasing: {batch['cu_seqlens']}")
                 if batch['cu_seqlens'][0] != 0:
                     raise ValueError(f"Calculated cu_seqlens do not start at 0: {batch['cu_seqlens']}")
                 if batch['cu_seqlens'][-1] != batch['input_ids'].size(1):
@@ -499,9 +499,9 @@ class DataCollatorForLanguageModeling:
                     if not split_boundaries: # Handle case of completely empty input
                         batch['cu_seqlens'] = torch.tensor([0, 0], dtype=torch.int32, device=batch['input_ids'].device)
                     else:
-                         batch['cu_seqlens'] = torch.cat(split_boundaries + [final_end_point]).to(dtype=torch.int32)
-                         # Ensure uniqueness and sort, as arange might duplicate the endpoint
-                         batch['cu_seqlens'] = torch.unique(batch['cu_seqlens'])
+                        batch['cu_seqlens'] = torch.cat(split_boundaries + [final_end_point]).to(dtype=torch.int32)
+                        # Ensure uniqueness and sort, as arange might duplicate the endpoint
+                        batch['cu_seqlens'] = torch.unique(batch['cu_seqlens'])
 
 
             # Create labels directly from input_ids, NO padding mask needed for varlen
