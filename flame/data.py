@@ -406,7 +406,7 @@ class DataCollatorForLanguageModeling:
             labels = batch['input_ids'].clone()
             # Mask labels only where attention_mask is 0 (padding positions)
             if 'attention_mask' in batch:
-                 labels[batch['attention_mask'] == 0] = -100
+                labels[batch['attention_mask'] == 0] = -100
             batch["labels"] = labels
 
         else:
