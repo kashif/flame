@@ -331,27 +331,26 @@ def shuffle(
 @dataclass
 class DataCollatorForLanguageModeling:
     """
-    Data collator used for language modeling.
+    Data collator used for language modeling. Inputs are dynamically padded if `varlen=False`.
+    If `varlen=True`, sequences are expected to be concatenated, and labels match inputs.
 
     Args:
         tokenizer ([`PreTrainedTokenizer`] or [`PreTrainedTokenizerFast`]):
             The tokenizer used for encoding the data.
-        context_len (`int`):
-            The maximum allowed length for each sequence.
-            When `varlen=True`, longer sequences will be split into multiple chunks of at most this length.
+        context_len (`int`, optional):
+            When `varlen=True`, sequences longer than this length within a document
+            (as determined by `cu_seqlens`) will be further chunked.
         varlen (`bool`):
-            Whether to return sequences with variable lengths.
-            If `True`, the `cu_seqlens` indicating the start and end of each sequence will be returned.
-            For example, if the sequence lengths are `[4, 8, 12]`,
-            the returned `input_ids` will be a flattened tensor of shape `[1, 24]`, with `cu_seqlens` being `[0, 4, 12, 24]`.
+            Whether to handle variable length concatenated sequences (`True`) or padded batches (`False`).
 
     Returns:
         A dictionary with the following keys:
-        - `input_ids`: A tensor of shape `[batch_size, seq_len]` containing the input ids.
-        - `labels`: A tensor of shape `[batch_size, seq_len]` containing the labels.
-        - `cu_seqlens`: A tensor containing the start and end positions of each sequence.
+        - `input_ids`: Tensor of input IDs. Shape `[batch_size, seq_len]` if `varlen=False`, `[1, total_len]` if `varlen=True`.
+        - `labels`: Tensor of labels. Shape matches `input_ids`. Padding positions are masked with -100 if `varlen=False`.
+        - `attention_mask`: Tensor indicating non-padding tokens (only if `varlen=False`). Shape matches `input_ids`.
+        - `cu_seqlens`: Tensor of cumulative sequence lengths (only if `varlen=True`). Shape `[1, num_sequences + 1]`.
 
-    NOTE: When in variable length mode, the `batch_size` must be 1.
+    NOTE: When `varlen=True`, the `batch_size` must be 1.
     """
 
     tokenizer: PreTrainedTokenizer
@@ -381,28 +380,47 @@ class DataCollatorForLanguageModeling:
         examples = list(map(tensorize, examples))
 
         if not self.varlen:
+            # --- Handling for varlen=False (Batch Padding) ---
             length_of_first = examples[0]['input_ids'].size(0)
-            # Check if padding is necessary.
-            if all(example['input_ids'].size(0) == length_of_first for example in examples):
-                batch = {
-                    'input_ids': torch.stack([example['input_ids'] for example in examples], dim=0),
-                }
-            else:
-                # If yes, check if we have a `pad_token`.
-                if self.tokenizer._pad_token is None:
+            needs_padding = not all(example['input_ids'].size(0) == length_of_first for example in examples)
+
+            if needs_padding:
+                # Check for pad token if padding is actually required
+                if self.tokenizer.pad_token_id is None:
                     raise ValueError(
                         f"You are attempting to pad samples but the tokenizer you are using "
                         f"({self.tokenizer.__class__.__name__}) does not have a pad token."
                     )
-                batch = self.tokenizer.pad(examples, return_tensors='pt', return_attention_mask=False)
+                # Pad using the tokenizer, ensuring attention_mask is returned
+                batch = self.tokenizer.pad(examples, return_tensors='pt', return_attention_mask=True)
+            else:
+                # No padding needed, stack directly and create a full attention mask
+                input_ids = torch.stack([example['input_ids'] for example in examples], dim=0)
+                batch = {
+                    'input_ids': input_ids,
+                    # Create attention mask of all ones
+                    'attention_mask': torch.ones_like(input_ids)
+                }
+
+            # Create labels by cloning input_ids
+            labels = batch['input_ids'].clone()
+            # Mask labels only where attention_mask is 0 (padding positions)
+            if 'attention_mask' in batch:
+                 labels[batch['attention_mask'] == 0] = -100
+            batch["labels"] = labels
+
         else:
+            # --- Handling for varlen=True (Concatenated Sequences) ---
             if len(examples) > 1:
-                raise ValueError("The batch size must be 1 for inputs with variable lengths.")
+                raise ValueError("The batch size must be 1 for inputs with variable lengths (varlen=True).")
+
             batch = {
                 'input_ids': torch.cat([example['input_ids'] for example in examples], dim=0).unsqueeze(0)
             }
+
+            # --- cu_seqlens calculation logic remains the same ---
             if 'cu_seqlens' in examples[0]:
-                batch['cu_seqlens'] = torch.cat([example['cu_seqlens'] for example in examples], dim=0).unsqueeze(0)
+                batch['cu_seqlens'] = torch.cat([example['cu_seqlens'] for example in examples], dim=0).unsqueeze(0).to(dtype=torch.int32) # Ensure int32
             else:
                 # determine boundaries by bos/eos positions
                 # Check for bos_token_id first
@@ -410,52 +428,86 @@ class DataCollatorForLanguageModeling:
                     cu_seqlens = []
                     # Handle case where the sequence doesn't start with BOS
                     if batch['input_ids'][0, 0] != self.tokenizer.bos_token_id:
-                        cu_seqlens.append(torch.tensor([0]))
+                        cu_seqlens.append(torch.tensor([0], device=batch['input_ids'].device)) # Match device
                     # Find all BOS token positions
-                    cu_seqlens.append(torch.where(batch['input_ids'].eq(self.tokenizer.bos_token_id))[1])
+                    bos_positions = torch.where(batch['input_ids'].eq(self.tokenizer.bos_token_id))[1]
+                    # Ensure bos_positions is on the correct device if empty
+                    if bos_positions.numel() == 0 and len(cu_seqlens) > 0:
+                        cu_seqlens.append(bos_positions.to(cu_seqlens[0].device))
+                    elif bos_positions.numel() > 0:
+                         cu_seqlens.append(bos_positions)
                     # Add the end of the entire batch
-                    cu_seqlens.append(torch.tensor([batch['input_ids'].size(1)])) # Use size(1) for sequence length dim
-                    batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
+                    cu_seqlens.append(torch.tensor([batch['input_ids'].size(1)], device=batch['input_ids'].device)) # Match device and use size(1)
+                    # Filter out empty tensors before cat
+                    cu_seqlens = [t for t in cu_seqlens if t.numel() > 0]
+                    if not cu_seqlens: # Handle case where input is empty or has no BOS
+                         batch['cu_seqlens'] = torch.tensor([0, batch['input_ids'].size(1)], dtype=torch.int32, device=batch['input_ids'].device)
+                    else:
+                         batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
+
                 # Else, check for eos_token_id
                 elif self.tokenizer.eos_token_id is not None:
-                    cu_seqlens = [torch.tensor([0])]
+                    cu_seqlens = [torch.tensor([0], device=batch['input_ids'].device)] # Match device
                     # Find positions *after* EOS tokens
                     eos_positions = torch.where(batch['input_ids'].eq(self.tokenizer.eos_token_id))[1] + 1
-                    cu_seqlens.append(eos_positions)
+                    # Ensure eos_positions is on the correct device if empty
+                    if eos_positions.numel() > 0:
+                         cu_seqlens.append(eos_positions)
                     # Handle case where the sequence doesn't end with EOS
                     if batch['input_ids'][0, -1] != self.tokenizer.eos_token_id:
                          # Only add the final length if the last found EOS wasn't already the end
                         if eos_positions.numel() == 0 or eos_positions[-1] != batch['input_ids'].size(1):
-                             cu_seqlens.append(torch.tensor([batch['input_ids'].size(1)])) # Use size(1) for sequence length dim
-                    batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
+                             cu_seqlens.append(torch.tensor([batch['input_ids'].size(1)], device=batch['input_ids'].device)) # Match device and use size(1)
+                    # Filter out empty tensors before cat
+                    cu_seqlens = [t for t in cu_seqlens if t.numel() > 0]
+                    if not cu_seqlens: # Handle case where input is empty or has no EOS
+                         batch['cu_seqlens'] = torch.tensor([0, batch['input_ids'].size(1)], dtype=torch.int32, device=batch['input_ids'].device)
+                    else:
+                         batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
                 # Else, neither BOS nor EOS is usable
                 else:
                     raise ValueError(
-                        "For varlen=True, the tokenizer must have either a bos_token_id or an eos_token_id defined "
-                        "to act as sequence separators, or cu_seqlens must be provided in the dataset."
+                        "For varlen=True without precomputed cu_seqlens, the tokenizer must have either a bos_token_id "
+                        "or an eos_token_id defined to act as sequence separators."
                     )
 
-            # Ensure cu_seqlens are correctly calculated (monotonically increasing, start at 0, end at total length)
-            if not torch.all(batch['cu_seqlens'][1:] >= batch['cu_seqlens'][:-1]):
-                 raise ValueError(f"Calculated cu_seqlens are not monotonically increasing: {batch['cu_seqlens']}")
-            if batch['cu_seqlens'][0] != 0:
-                raise ValueError(f"Calculated cu_seqlens do not start at 0: {batch['cu_seqlens']}")
-            if batch['cu_seqlens'][-1] != batch['input_ids'].size(1):
-                raise ValueError(f"Calculated cu_seqlens do not end at total length {batch['input_ids'].size(1)}: {batch['cu_seqlens']}")
+                # --- cu_seqlens validation checks remain the same ---
+                if batch['cu_seqlens'].numel() < 2:
+                     raise ValueError(f"Calculated cu_seqlens must have at least start and end: {batch['cu_seqlens']}")
+                if not torch.all(batch['cu_seqlens'][1:] >= batch['cu_seqlens'][:-1]):
+                     raise ValueError(f"Calculated cu_seqlens are not monotonically increasing: {batch['cu_seqlens']}")
+                if batch['cu_seqlens'][0] != 0:
+                    raise ValueError(f"Calculated cu_seqlens do not start at 0: {batch['cu_seqlens']}")
+                if batch['cu_seqlens'][-1] != batch['input_ids'].size(1):
+                     # Allow empty sequence case where cu_seqlens=[0, 0] and input_ids.size(1)=0
+                    if not (batch['cu_seqlens'].tolist() == [0, 0] and batch['input_ids'].size(1) == 0):
+                        raise ValueError(f"Calculated cu_seqlens do not end at total length {batch['input_ids'].size(1)}: {batch['cu_seqlens']}")
 
-            if self.context_len is not None:
-                # This logic splits sequences based on context_len *after* initial boundaries are found
-                bos = batch['cu_seqlens'][:-1].tolist()
-                eos = batch['cu_seqlens'][1:].tolist()
-                batch['cu_seqlens'] = torch.cat(
-                    [torch.arange(i, j, self.context_len) for i, j in zip(bos, eos)] +
-                    [torch.tensor([len(batch['input_ids'][0])])]
-                ).to(dtype=torch.int32)
+                # --- context_len splitting logic remains the same ---
+                if self.context_len is not None:
+                    # This logic splits sequences based on context_len *after* initial boundaries are found
+                    bos = batch['cu_seqlens'][:-1].tolist()
+                    eos = batch['cu_seqlens'][1:].tolist()
+                    # Handle empty sequences between boundaries
+                    split_boundaries = []
+                    for i, j in zip(bos, eos):
+                        if i < j: # Only process non-empty sequences
+                            split_boundaries.append(torch.arange(i, j, self.context_len, device=batch['input_ids'].device))
+                    # Add the final end point if it wasn't included by arange
+                    final_end_point = torch.tensor([batch['input_ids'].size(1)], device=batch['input_ids'].device)
+                    # Concatenate all boundaries
+                    if not split_boundaries: # Handle case of completely empty input
+                        batch['cu_seqlens'] = torch.tensor([0, 0], dtype=torch.int32, device=batch['input_ids'].device)
+                    else:
+                         batch['cu_seqlens'] = torch.cat(split_boundaries + [final_end_point]).to(dtype=torch.int32)
+                         # Ensure uniqueness and sort, as arange might duplicate the endpoint
+                         batch['cu_seqlens'] = torch.unique(batch['cu_seqlens'])
 
-        labels = batch['input_ids'].clone()
-        if self.tokenizer.pad_token_id is not None:
-            labels[labels == self.tokenizer.pad_token_id] = -100
-        batch["labels"] = labels
+
+            # Create labels directly from input_ids, NO padding mask needed for varlen
+            labels = batch['input_ids'].clone()
+            batch["labels"] = labels
+
         return batch
 
 
