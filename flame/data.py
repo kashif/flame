@@ -87,20 +87,20 @@ class BufferShuffledIterableDataset(IterableDataset):
                 self.buffer = torch.tensor(self.tokens[:n_tokens], dtype=torch.long).view(n_chunks, -1)
                 self.tokens = self.tokens[n_tokens:]
                 for i in indices:
-                    yield {"input_ids": self.buffer[i]}
+                    yield {'input_ids': self.buffer[i]}
 
     def tokenize(self, data, batch_size: int = 64):
         texts, states = [], []
         for sample in data:
-            texts.append(sample["text"])
+            texts.append(sample['text'])
             states.append(self.data.state_dict())
             if len(texts) == batch_size:
-                for s, tokenized in zip(states, self.tokenizer(texts, return_attention_mask=False)["input_ids"]):
+                for s, tokenized in zip(states, self.tokenizer(texts, return_attention_mask=False)['input_ids']):
                     self.states = s
                     yield tokenized
                 texts, states = [], []
         if len(texts) > 0:
-            for s, tokenized in zip(states, self.tokenizer(texts, return_attention_mask=False)["input_ids"]):
+            for s, tokenized in zip(states, self.tokenizer(texts, return_attention_mask=False)['input_ids']):
                 self.states = s
                 yield tokenized
 
@@ -110,7 +110,7 @@ class BufferShuffledIterableDataset(IterableDataset):
             i = next(indices)
             start, end = self.token_id, self.token_id + self.seq_len
             self.token_id += self.seq_len
-            yield {"input_ids": self.buffer[i].to(torch.long)}
+            yield {'input_ids': self.buffer[i].to(torch.long)}
             self.buffer[i] = torch.tensor(self.tokens[start:end], dtype=self.dtype)
         self.token_id = 0
         self.tokens = self.tokens[n_tokens:]
@@ -128,28 +128,28 @@ class BufferShuffledIterableDataset(IterableDataset):
 
     def set_epoch(self, epoch):
         self._epoch = epoch
-        if hasattr(self.dataset, "set_epoch"):
+        if hasattr(self.dataset, 'set_epoch'):
             self.dataset.set_epoch(epoch)
 
     def state_dict(self):
         return {
-            "states": self.states,
-            "buffer": self.buffer.clone(),
-            "tokens": deepcopy(self.tokens),
-            "rand_id": self.rand_id,
-            "token_id": self.token_id,
-            "rng_state": self.rng_state,
-            "epoch": self._epoch,
+            'states': self.states,
+            'buffer': self.buffer.clone(),
+            'tokens': deepcopy(self.tokens),
+            'rand_id': self.rand_id,
+            'token_id': self.token_id,
+            'rng_state': self.rng_state,
+            'epoch': self._epoch,
         }
 
     def load_state_dict(self, state_dict):
-        self.states = state_dict["states"]
-        self.buffer = state_dict["buffer"].clone()
-        self.tokens = deepcopy(state_dict["tokens"])
-        self.rand_id = state_dict["rand_id"]
-        self.token_id = state_dict["token_id"]
-        self.rng_state = state_dict["rng_state"].clone() if state_dict["rng_state"] is not None else None
-        self._epoch = state_dict["epoch"]
+        self.states = state_dict['states']
+        self.buffer = state_dict['buffer'].clone()
+        self.tokens = deepcopy(state_dict['tokens'])
+        self.rand_id = state_dict['rand_id']
+        self.token_id = state_dict['token_id']
+        self.rng_state = state_dict['rng_state'].clone() if state_dict['rng_state'] is not None else None
+        self._epoch = state_dict['epoch']
 
 
 class OnlineTokenizedIterableDataset(IterableDataset):
@@ -179,34 +179,34 @@ class OnlineTokenizedIterableDataset(IterableDataset):
                 while len(self.tokens) >= self.seq_len:
                     input_ids = torch.tensor(self.tokens[: self.seq_len], dtype=torch.long)
                     self.tokens = self.tokens[self.seq_len :]
-                    yield {"input_ids": input_ids}
+                    yield {'input_ids': input_ids}
 
     def tokenize(self, data, buffer_size: int = 64):
         buffer, states = [], []
         for sample in data:
-            if sample.get("text", None) is not None:
-                buffer.append(sample["text"])
-            elif sample.get("content", None) is not None:
-                buffer.append(sample["content"])
+            if sample.get('text', None) is not None:
+                buffer.append(sample['text'])
+            elif sample.get('content', None) is not None:
+                buffer.append(sample['content'])
             else:
                 raise ValueError(f"No 'text' or 'content' field found in sample:\n{sample}")
             states.append(self.data.state_dict())
             if len(buffer) == buffer_size:
-                for s, tokenized in zip(states, self.tokenizer(buffer, return_attention_mask=False)["input_ids"]):
+                for s, tokenized in zip(states, self.tokenizer(buffer, return_attention_mask=False)['input_ids']):
                     self.states = s
                     yield tokenized
                 buffer, states = [], []
         if len(buffer) > 0:
-            for s, tokenized in zip(states, self.tokenizer(buffer, return_attention_mask=False)["input_ids"]):
+            for s, tokenized in zip(states, self.tokenizer(buffer, return_attention_mask=False)['input_ids']):
                 self.states = s
                 yield tokenized
 
     def state_dict(self):
-        return {"states": self.states, "tokens": deepcopy(self.tokens)}
+        return {'states': self.states, 'tokens': deepcopy(self.tokens)}
 
     def load_state_dict(self, state_dict):
-        self.states = state_dict["states"]
-        self.tokens = deepcopy(state_dict["tokens"])
+        self.states = state_dict['states']
+        self.tokens = deepcopy(state_dict['tokens'])
 
 
 class BufferShuffledExamplesIterable(datasets.iterable_dataset.BufferShuffledExamplesIterable):
@@ -215,21 +215,21 @@ class BufferShuffledExamplesIterable(datasets.iterable_dataset.BufferShuffledExa
 
     def _init_state_dict(self) -> dict:
         self._state_dict = self.ex_iterable._init_state_dict()
-        self._state_dict["mem_buffer"] = ([],)
-        self._state_dict["bit_generator_state"] = self.generator.bit_generator.state
-        self._state_dict["bit_generator_index_offset"] = 0
-        self._state_dict["bit_generator_index_offset_shuffle"] = 0
+        self._state_dict['mem_buffer'] = ([],)
+        self._state_dict['bit_generator_state'] = self.generator.bit_generator.state
+        self._state_dict['bit_generator_index_offset'] = 0
+        self._state_dict['bit_generator_index_offset_shuffle'] = 0
         return self._state_dict
 
     def __iter__(self):
         buffer_size = self.buffer_size
         rng = deepcopy(self.generator)
         # this is the shuffle buffer that we keep in memory
-        mem_buffer = self._state_dict["mem_buffer"][0]
+        mem_buffer = self._state_dict['mem_buffer'][0]
         # this is an infinite iterator that randomly samples the index of the source to pick examples from
-        index_offset = self._state_dict["bit_generator_index_offset"] if self._state_dict else 0
+        index_offset = self._state_dict['bit_generator_index_offset'] if self._state_dict else 0
         if self._state_dict:
-            rng.bit_generator.state = self._state_dict["bit_generator_state"]
+            rng.bit_generator.state = self._state_dict['bit_generator_state']
         indices_iterator = self._iter_random_indices(rng, buffer_size, random_batch_size=buffer_size)
         # skip already consumed ones
         for _ in range(index_offset):
@@ -242,22 +242,22 @@ class BufferShuffledExamplesIterable(datasets.iterable_dataset.BufferShuffledExa
                 i = next(indices_iterator)
                 index_offset = (index_offset + 1) % buffer_size
                 if self._state_dict:
-                    self._state_dict["bit_generator_index_offset"] = index_offset
+                    self._state_dict['bit_generator_index_offset'] = index_offset
                     if index_offset == 0:
-                        self._state_dict["bit_generator_state"] = rng.bit_generator.state
+                        self._state_dict['bit_generator_state'] = rng.bit_generator.state
                 selected = mem_buffer[i]
                 mem_buffer[i] = x  # replace the picked example by a new one
                 yield selected
 
-        index_offset = self._state_dict["bit_generator_index_offset_shuffle"] if self._state_dict else 0
+        index_offset = self._state_dict['bit_generator_index_offset_shuffle'] if self._state_dict else 0
         if self._state_dict:
-            rng.bit_generator.state = self._state_dict["bit_generator_state"]
+            rng.bit_generator.state = self._state_dict['bit_generator_state']
 
         # when we run out of examples, we shuffle the remaining examples in the buffer and yield them
         for i in rng.permutation(len(mem_buffer))[index_offset:].tolist():
             index_offset = index_offset + 1
             if self._state_dict:
-                self._state_dict["bit_generator_index_offset_shuffle"] = index_offset
+                self._state_dict['bit_generator_index_offset_shuffle'] = index_offset
             yield mem_buffer[i]
 
     def shuffle_data_sources(self, generator: np.random.Generator) -> BufferShuffledExamplesIterable:
@@ -338,11 +338,11 @@ class DataCollatorForLanguageModeling:
 
     def __call__(self, examples: List[Union[List[int], Dict[str, Any]]]) -> Dict[str, Any]:
         if not isinstance(examples[0], Dict):
-            examples = [{"input_ids": example} for example in examples]
+            examples = [{'input_ids': example} for example in examples]
 
         def tensorize(example: Dict[str, Any]) -> Dict[str, Any]:
             tensorized = {}
-            for key in ["input_ids", "cu_seqlens"]:
+            for key in ['input_ids', 'cu_seqlens']:
                 if key not in example:
                     continue
                 if isinstance(example[key], List):
@@ -357,45 +357,45 @@ class DataCollatorForLanguageModeling:
 
         if not self.varlen:
             # --- Handling for varlen=False (Batch Padding) ---
-            length_of_first = examples[0]["input_ids"].size(0)
-            needs_padding = not all(example["input_ids"].size(0) == length_of_first for example in examples)
+            length_of_first = examples[0]['input_ids'].size(0)
+            needs_padding = not all(example['input_ids'].size(0) == length_of_first for example in examples)
 
             if needs_padding:
                 # Check for pad token if padding is actually required
                 if self.tokenizer.pad_token_id is None:
                     raise ValueError(
-                        f"You are attempting to pad samples but the tokenizer you are using "
-                        f"({self.tokenizer.__class__.__name__}) does not have a pad token."
+                        f'You are attempting to pad samples but the tokenizer you are using '
+                        f'({self.tokenizer.__class__.__name__}) does not have a pad token.'
                     )
                 # Pad using the tokenizer, ensuring attention_mask is returned
-                batch = self.tokenizer.pad(examples, return_tensors="pt", return_attention_mask=True)
+                batch = self.tokenizer.pad(examples, return_tensors='pt', return_attention_mask=True)
             else:
                 # No padding needed, stack directly and create a full attention mask
-                input_ids = torch.stack([example["input_ids"] for example in examples], dim=0)
+                input_ids = torch.stack([example['input_ids'] for example in examples], dim=0)
                 batch = {
-                    "input_ids": input_ids,
+                    'input_ids': input_ids,
                     # Create attention mask of all ones
-                    "attention_mask": torch.ones_like(input_ids),
+                    'attention_mask': torch.ones_like(input_ids),
                 }
 
             # Create labels by cloning input_ids
-            labels = batch["input_ids"].clone()
+            labels = batch['input_ids'].clone()
             # Mask labels only where attention_mask is 0 (padding positions)
-            if "attention_mask" in batch:
-                labels[batch["attention_mask"] == 0] = -100
-            batch["labels"] = labels
+            if 'attention_mask' in batch:
+                labels[batch['attention_mask'] == 0] = -100
+            batch['labels'] = labels
 
         else:
             # --- Handling for varlen=True (Concatenated Sequences) ---
             if len(examples) > 1:
-                raise ValueError("The batch size must be 1 for inputs with variable lengths (varlen=True).")
+                raise ValueError('The batch size must be 1 for inputs with variable lengths (varlen=True).')
 
-            batch = {"input_ids": torch.cat([example["input_ids"] for example in examples], dim=0).unsqueeze(0)}
+            batch = {'input_ids': torch.cat([example['input_ids'] for example in examples], dim=0).unsqueeze(0)}
 
             # --- cu_seqlens calculation logic remains the same ---
-            if "cu_seqlens" in examples[0]:
-                batch["cu_seqlens"] = (
-                    torch.cat([example["cu_seqlens"] for example in examples], dim=0).unsqueeze(0).to(dtype=torch.int32)
+            if 'cu_seqlens' in examples[0]:
+                batch['cu_seqlens'] = (
+                    torch.cat([example['cu_seqlens'] for example in examples], dim=0).unsqueeze(0).to(dtype=torch.int32)
                 )  # Ensure int32
             else:
                 # determine boundaries by bos/eos positions
@@ -403,10 +403,10 @@ class DataCollatorForLanguageModeling:
                 if self.tokenizer.bos_token_id is not None:
                     cu_seqlens = []
                     # Handle case where the sequence doesn't start with BOS
-                    if batch["input_ids"][0, 0] != self.tokenizer.bos_token_id:
-                        cu_seqlens.append(torch.tensor([0], device=batch["input_ids"].device))  # Match device
+                    if batch['input_ids'][0, 0] != self.tokenizer.bos_token_id:
+                        cu_seqlens.append(torch.tensor([0], device=batch['input_ids'].device))  # Match device
                     # Find all BOS token positions
-                    bos_positions = torch.where(batch["input_ids"].eq(self.tokenizer.bos_token_id))[1]
+                    bos_positions = torch.where(batch['input_ids'].eq(self.tokenizer.bos_token_id))[1]
                     # Ensure bos_positions is on the correct device if empty
                     if bos_positions.numel() == 0 and len(cu_seqlens) > 0:
                         cu_seqlens.append(bos_positions.to(cu_seqlens[0].device))
@@ -414,84 +414,84 @@ class DataCollatorForLanguageModeling:
                         cu_seqlens.append(bos_positions)
                     # Add the end of the entire batch
                     cu_seqlens.append(
-                        torch.tensor([batch["input_ids"].size(1)], device=batch["input_ids"].device)
+                        torch.tensor([batch['input_ids'].size(1)], device=batch['input_ids'].device)
                     )  # Match device and use size(1)
                     # Filter out empty tensors before cat
                     cu_seqlens = [t for t in cu_seqlens if t.numel() > 0]
                     if not cu_seqlens:  # Handle case where input is empty or has no BOS
-                        batch["cu_seqlens"] = torch.tensor(
-                            [0, batch["input_ids"].size(1)], dtype=torch.int32, device=batch["input_ids"].device
+                        batch['cu_seqlens'] = torch.tensor(
+                            [0, batch['input_ids'].size(1)], dtype=torch.int32, device=batch['input_ids'].device
                         )
                     else:
-                        batch["cu_seqlens"] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
+                        batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
 
                 # Else, check for eos_token_id
                 elif self.tokenizer.eos_token_id is not None:
-                    cu_seqlens = [torch.tensor([0], device=batch["input_ids"].device)]  # Match device
+                    cu_seqlens = [torch.tensor([0], device=batch['input_ids'].device)]  # Match device
                     # Find positions *after* EOS tokens
-                    eos_positions = torch.where(batch["input_ids"].eq(self.tokenizer.eos_token_id))[1] + 1
+                    eos_positions = torch.where(batch['input_ids'].eq(self.tokenizer.eos_token_id))[1] + 1
                     # Ensure eos_positions is on the correct device if empty
                     if eos_positions.numel() > 0:
                         cu_seqlens.append(eos_positions)
                     # Handle case where the sequence doesn't end with EOS
-                    if batch["input_ids"][0, -1] != self.tokenizer.eos_token_id:
+                    if batch['input_ids'][0, -1] != self.tokenizer.eos_token_id:
                         # Only add the final length if the last found EOS wasn't already the end
-                        if eos_positions.numel() == 0 or eos_positions[-1] != batch["input_ids"].size(1):
+                        if eos_positions.numel() == 0 or eos_positions[-1] != batch['input_ids'].size(1):
                             cu_seqlens.append(
-                                torch.tensor([batch["input_ids"].size(1)], device=batch["input_ids"].device)
+                                torch.tensor([batch['input_ids'].size(1)], device=batch['input_ids'].device)
                             )  # Match device and use size(1)
                     # Filter out empty tensors before cat
                     cu_seqlens = [t for t in cu_seqlens if t.numel() > 0]
                     if not cu_seqlens:  # Handle case where input is empty or has no EOS
-                        batch["cu_seqlens"] = torch.tensor(
-                            [0, batch["input_ids"].size(1)], dtype=torch.int32, device=batch["input_ids"].device
+                        batch['cu_seqlens'] = torch.tensor(
+                            [0, batch['input_ids'].size(1)], dtype=torch.int32, device=batch['input_ids'].device
                         )
                     else:
-                        batch["cu_seqlens"] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
+                        batch['cu_seqlens'] = torch.cat(cu_seqlens, dim=0).to(dtype=torch.int32)
                 # Else, neither BOS nor EOS is usable
                 else:
                     raise ValueError(
-                        "For varlen=True without precomputed cu_seqlens, the tokenizer must have either a bos_token_id "
-                        "or an eos_token_id defined to act as sequence separators."
+                        'For varlen=True without precomputed cu_seqlens, the tokenizer must have either a bos_token_id '
+                        'or an eos_token_id defined to act as sequence separators.'
                     )
 
                 # --- cu_seqlens validation checks remain the same ---
-                if batch["cu_seqlens"].numel() < 2:
-                    raise ValueError(f"Calculated cu_seqlens must have at least start and end: {batch['cu_seqlens']}")
-                if not torch.all(batch["cu_seqlens"][1:] >= batch["cu_seqlens"][:-1]):
-                    raise ValueError(f"Calculated cu_seqlens are not monotonically increasing: {batch['cu_seqlens']}")
-                if batch["cu_seqlens"][0] != 0:
-                    raise ValueError(f"Calculated cu_seqlens do not start at 0: {batch['cu_seqlens']}")
-                if batch["cu_seqlens"][-1] != batch["input_ids"].size(1):
+                if batch['cu_seqlens'].numel() < 2:
+                    raise ValueError(f'Calculated cu_seqlens must have at least start and end: {batch["cu_seqlens"]}')
+                if not torch.all(batch['cu_seqlens'][1:] >= batch['cu_seqlens'][:-1]):
+                    raise ValueError(f'Calculated cu_seqlens are not monotonically increasing: {batch["cu_seqlens"]}')
+                if batch['cu_seqlens'][0] != 0:
+                    raise ValueError(f'Calculated cu_seqlens do not start at 0: {batch["cu_seqlens"]}')
+                if batch['cu_seqlens'][-1] != batch['input_ids'].size(1):
                     # Allow empty sequence case where cu_seqlens=[0, 0] and input_ids.size(1)=0
-                    if not (batch["cu_seqlens"].tolist() == [0, 0] and batch["input_ids"].size(1) == 0):
+                    if not (batch['cu_seqlens'].tolist() == [0, 0] and batch['input_ids'].size(1) == 0):
                         raise ValueError(
-                            f"Calculated cu_seqlens do not end at total length {batch['input_ids'].size(1)}: {batch['cu_seqlens']}"
+                            f'Calculated cu_seqlens do not end at total length {batch["input_ids"].size(1)}: {batch["cu_seqlens"]}'
                         )
 
                 # --- context_len splitting logic remains the same ---
                 if self.context_len is not None:
                     # This logic splits sequences based on context_len *after* initial boundaries are found
-                    bos = batch["cu_seqlens"][:-1].tolist()
-                    eos = batch["cu_seqlens"][1:].tolist()
+                    bos = batch['cu_seqlens'][:-1].tolist()
+                    eos = batch['cu_seqlens'][1:].tolist()
                     # Handle empty sequences between boundaries
                     split_boundaries = []
                     for i, j in zip(bos, eos):
                         if i < j:  # Only process non-empty sequences
-                            split_boundaries.append(torch.arange(i, j, self.context_len, device=batch["input_ids"].device))
+                            split_boundaries.append(torch.arange(i, j, self.context_len, device=batch['input_ids'].device))
                     # Add the final end point if it wasn't included by arange
-                    final_end_point = torch.tensor([batch["input_ids"].size(1)], device=batch["input_ids"].device)
+                    final_end_point = torch.tensor([batch['input_ids'].size(1)], device=batch['input_ids'].device)
                     # Concatenate all boundaries
                     if not split_boundaries:  # Handle case of completely empty input
-                        batch["cu_seqlens"] = torch.tensor([0, 0], dtype=torch.int32, device=batch["input_ids"].device)
+                        batch['cu_seqlens'] = torch.tensor([0, 0], dtype=torch.int32, device=batch['input_ids'].device)
                     else:
-                        batch["cu_seqlens"] = torch.cat(split_boundaries + [final_end_point]).to(dtype=torch.int32)
+                        batch['cu_seqlens'] = torch.cat(split_boundaries + [final_end_point]).to(dtype=torch.int32)
                         # Ensure uniqueness and sort, as arange might duplicate the endpoint
-                        batch["cu_seqlens"] = torch.unique(batch["cu_seqlens"])
+                        batch['cu_seqlens'] = torch.unique(batch['cu_seqlens'])
 
             # Create labels directly from input_ids, NO padding mask needed for varlen
-            labels = batch["input_ids"].clone()
-            batch["labels"] = labels
+            labels = batch['input_ids'].clone()
+            batch['labels'] = labels
 
         return batch
 
@@ -527,17 +527,17 @@ class ParallelAwareDataLoader(StatefulDataLoader, Stateful):
 
     def state_dict(self) -> Dict[str, Any]:
         # Store state only for dp rank to avoid replicating the same state across other dimensions
-        return {f"rank_{self.rank}": pickle.dumps(super().state_dict())}
+        return {f'rank_{self.rank}': pickle.dumps(super().state_dict())}
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         # State being empty is valid
         if not state_dict:
             return
 
-        if f"rank_{self.rank}" not in state_dict:
-            logger.warning(f"DataLoader state is empty for dp rank {self.rank}, expected key rank_{self.rank}")
+        if f'rank_{self.rank}' not in state_dict:
+            logger.warning(f'DataLoader state is empty for dp rank {self.rank}, expected key rank_{self.rank}')
             return
-        super().load_state_dict(pickle.loads(state_dict[f"rank_{self.rank}"]))
+        super().load_state_dict(pickle.loads(state_dict[f'rank_{self.rank}']))
 
 
 def build_dataloader(
