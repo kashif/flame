@@ -121,7 +121,7 @@ class BufferShuffledIterableDataset(IterableDataset):
             # record the generator states before sampling
             self.rng_state = g.get_state()
             indices = torch.randint(low, high, (buffer_size,), out=indices, generator=g)
-            for i in indices[self.rand_id :].tolist():
+            for i in indices[self.rand_id:].tolist():
                 self.rand_id += 1
                 yield i
             self.rand_id = 0
@@ -177,8 +177,8 @@ class OnlineTokenizedIterableDataset(IterableDataset):
                 self.tokens += sample
 
                 while len(self.tokens) >= self.seq_len:
-                    input_ids = torch.tensor(self.tokens[: self.seq_len], dtype=torch.long)
-                    self.tokens = self.tokens[self.seq_len :]
+                    input_ids = torch.tensor(self.tokens[:self.seq_len], dtype=torch.long)
+                    self.tokens = self.tokens[self.seq_len:]
                     yield {'input_ids': input_ids}
 
     def tokenize(self, data, buffer_size: int = 64):
@@ -466,7 +466,8 @@ class DataCollatorForLanguageModeling:
                     # Allow empty sequence case where cu_seqlens=[0, 0] and input_ids.size(1)=0
                     if not (batch['cu_seqlens'].tolist() == [0, 0] and batch['input_ids'].size(1) == 0):
                         raise ValueError(
-                            f'Calculated cu_seqlens do not end at total length {batch["input_ids"].size(1)}: {batch["cu_seqlens"]}'
+                            f'Calculated cu_seqlens do not end at total length {batch["input_ids"].size(1)}: '
+                            f'{batch["cu_seqlens"]}'
                         )
 
                 # --- context_len splitting logic remains the same ---
