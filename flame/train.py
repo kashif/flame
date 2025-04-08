@@ -733,7 +733,10 @@ def main(job_config: JobConfig):
                     train_state.step,
                     global_avg_loss,
                     global_max_loss,
-                    extra_metrics={"loss_metrics/grad_norm": grad_norm.item()},
+                    extra_metrics={
+                        "optimizer/grad_norm": grad_norm.item(),
+                        "optimizer/skipped_step": train_state.skipped_step,              
+                    },
                 )
 
             checkpoint.save(
