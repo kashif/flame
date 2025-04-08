@@ -729,7 +729,12 @@ def main(job_config: JobConfig):
                 train_state.global_max_losses.append(global_max_loss)
 
                 # Log using the metric processor
-                metric_logger.log(train_state.step, global_avg_loss, global_max_loss)
+                metric_logger.log(
+                    train_state.step,
+                    global_avg_loss,
+                    global_max_loss,
+                    extra_metrics={"loss_metrics/grad_norm": grad_norm.item()},
+                )
 
             checkpoint.save(
                 train_state.step, force=(train_state.step == job_config.training.steps)
