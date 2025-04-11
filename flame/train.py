@@ -572,6 +572,10 @@ def main(job_config: JobConfig):
             optimizers.zero_grad()
 
             losses = []
+            # Initialize accuracy counts for the step
+            step_total_correct_tokens = torch.tensor(0, dtype=torch.long, device=device)
+            step_total_valid_tokens = torch.tensor(0, dtype=torch.long, device=device)
+
             # do gradient accumulation if enabled
             for _ in range(job_config.training.gradient_accumulation_steps):
                 # get batch
@@ -666,6 +670,30 @@ def main(job_config: JobConfig):
                         loss.backward()
 
                 losses.append(loss)
+
+                # Calculate token accuracy counts for the micro-batch and accumulate
+                if hasattr(output, 'logits'):
+                    with torch.no_grad():
+                        shift_logits = output.logits[..., :-1, :].contiguous()
+                        shift_labels = labels[..., 1:].contiguous()
+
+                        # Get predictions
+                        predictions = shift_logits.argmax(dim=-1)
+
+                        # Create mask for non-padding tokens (assuming ignore_index is -100)
+                        mask = shift_labels != -100
+
+                        # Calculate correct predictions on non-padding tokens
+                        correct_predictions = (predictions == shift_labels) & mask
+
+                        # Accumulate counts for the step
+                        step_total_correct_tokens += correct_predictions.sum()
+                        step_total_valid_tokens += mask.sum()
+                else:
+                     # Handle cases where logits might not be available (e.g., pipeline intermediate stages)
+                     # Or add a warning/error if logits are expected but missing
+                     pass # Or log a warning
+
             loss = sum(losses)
 
             # clip gradients
@@ -692,6 +720,7 @@ def main(job_config: JobConfig):
 
             # log metrics - Use MetricsProcessor
             if metric_logger.should_log(train_state.step):
+                # --- Loss Calculation ---
                 if (
                     parallel_dims.dp_replicate_enabled
                     or parallel_dims.dp_shard_enabled
@@ -711,8 +740,34 @@ def main(job_config: JobConfig):
                     )
                 else:
                     # Scale back the loss before logging
-                    global_avg_loss = global_max_loss = loss.item()
+                    global_avg_loss = global_max_loss = loss.detach().item()
 
+
+                # --- Accuracy Calculation ---
+                # Ensure tensors are on the correct device before reduction/calculation
+                current_device_correct = step_total_correct_tokens.to(device)
+                current_device_total = step_total_valid_tokens.to(device)
+
+                if parallel_dims.dp_replicate_enabled or parallel_dims.dp_shard_enabled or parallel_dims.cp_enabled:
+                    dp_cp_mesh = world_mesh["dp_cp"]
+                    # Calculate distributed sum of counts using dist_mean * size
+                    global_avg_correct = dist_utils.dist_mean(current_device_correct.float(), dp_cp_mesh)
+                    global_avg_total = dist_utils.dist_mean(current_device_total.float(), dp_cp_mesh)
+                    dp_cp_size = dp_cp_mesh.size()
+                    global_total_correct = global_avg_correct * dp_cp_size
+                    global_total_total = global_avg_total * dp_cp_size
+                    # Compute final accuracy
+                    mean_token_accuracy = (global_total_correct / global_total_total).item() if global_total_total > 0 else 0.0
+                else:
+                    # Use local step accuracy if not distributed
+                    mean_token_accuracy = (current_device_correct.float() / current_device_total.float()).item() if current_device_total > 0 else 0.0
+
+                # Reset counts for the next logging period *after* using them
+                step_total_correct_tokens.zero_()
+                step_total_valid_tokens.zero_()
+
+
+                # --- State Update & Logging ---
                 # Update train state tokens and elapsed time
                 time_now = time.perf_counter()
                 time_delta = (
@@ -743,6 +798,7 @@ def main(job_config: JobConfig):
                         "optimizer/lr": last_lr,
                         "optimizer/grad_norm": grad_norm.item(),
                         "optimizer/skipped_step": train_state.skipped_step,
+                        "accuracy/mean_token_accuracy": mean_token_accuracy,
                     },
                 )
 
