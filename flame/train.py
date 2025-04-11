@@ -672,7 +672,7 @@ def main(job_config: JobConfig):
                 losses.append(loss)
 
                 # Calculate token accuracy counts for the micro-batch and accumulate
-                if hasattr(output, 'logits'):
+                if hasattr(output, 'logits') and output.logits is not None:
                     with torch.no_grad():
                         shift_logits = output.logits[..., :-1, :].contiguous()
                         shift_labels = labels[..., 1:].contiguous()
