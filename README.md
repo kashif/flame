@@ -73,7 +73,6 @@ bash train.sh \
   --training.dataset HuggingFaceFW/fineweb-edu \
   --training.dataset_name sample-100BT \
   --training.dataset_split train \
-  --training.streaming \
   --training.num_workers 32 \
   --training.prefetch_factor 2 \
   --training.seed 42 \
