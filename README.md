@@ -58,12 +58,12 @@ Here's an example of training a 340M FLA Transformer model with a LLaMA-like arc
 ```sh
 bash train.sh \
   --job.config_file flame/models/fla.toml \
-  --job.dump_folder exp/transformer-340M-4K-10B/batch1.seqlen65536.context4096.warmup1024.update1.steps20480.lr3e-4.cosine \
+  --job.dump_folder exp/transformer-340M-4K-10B/batch1.seqlen65536.context4096.warmup1024.update1.steps20480.lr1e-3.cosine \
   --model.config configs/transformer_340M.json \
   --model.tokenizer_path fla-hub/transformer-1.3B-100B \
   --optimizer.name AdamW \
   --optimizer.eps 1e-15 \
-  --optimizer.lr 3e-4 \
+  --optimizer.lr 1e-3 \
   --lr_scheduler.warmup_steps 1024 \
   --lr_scheduler.lr_min 0.1 \
   --lr_scheduler.decay_type cosine \
@@ -92,7 +92,7 @@ You can specify the number of GPUs by setting the environment variable `NGPU`, w
 **For single-GPU debugging, set `NGPU=1`.**
 
 We provide several [config files](https://github.com/fla-org/flame/tree/main/configs) for different models.
-By default, the learning rate is set to 3e-4 with a cosine scheduler. Other schedulers, such as WSD (wsd), are also supported.
+By default, the learning rate is set to 1e-3 with a cosine scheduler. Other schedulers, such as WSD (wsd), are also supported.
 
 **Key parameters:**
 - `--lr_scheduler.decay_ratio`: The proportion of the steps allocated to the decay phase. The learning rate will remain stable after the warmup period and only start decaying during the last `decay_ratio` portion of the total training steps, which is known as the Warmup-Stable-Decay (WSD) schedule.
