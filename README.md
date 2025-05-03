@@ -28,10 +28,9 @@ Install the latest version of fla
 pip uninstall flash-linear-attention && pip install -U --no-use-pep517 git+https://github.com/fla-org/flash-linear-attention
 ```
 
-`flame` manages minimal dependencies, only including `lm-evaluation-harness` and `torchtitan` as submodules.
-After installation, initialize and update the submodules:
-```sh
-git submodule update --init --recursive
+[Important] Install specific version of torchtitan
+```
+pip install git+https://github.com/pytorch/torchtitan.git@5e2033c
 ```
 
 
