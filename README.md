@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🔥 Flame: Flash Linear Attention Made Easy
+# 🔥 Flame: A training framework for language modeling
 
 </div>
 
-Welcome to 🔥 `flame`, a minimal and efficient framework built on `torchtitan` for training Flash Linear Attention (FLA) models (and more broadly, arbitrary autoregressive language models) with blazing efficiency.
+Welcome to 🔥 `flame`, a minimal and efficient framework built on `torchtitan` for language models with blazing efficiency.
 
 **Feature Highlights:**
 
